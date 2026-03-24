@@ -13,7 +13,6 @@ export interface Proof {
   value: string;
   salt: string;
   merkleProof: string[]; 
-  rootHash: string;
 }
 
 /**
@@ -61,11 +60,8 @@ export const calculateMerkleRoot = async (leaves: string[]): Promise<string> => 
   return calculateMerkleRoot(nextLevel);
 };
 
-/**
- * Main verification function
- */
+
 const verifyProof = async (p: Proof, expectedRoot: string): Promise<boolean> => {
-  console.log("called verify")
   const disclosedLeafHash = await hashData(p.value, p.salt);
   const found = p.merkleProof.includes(disclosedLeafHash);
   if (!found) {
