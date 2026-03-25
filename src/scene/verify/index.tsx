@@ -64,9 +64,23 @@ const ProofVerifier: React.FC = () => {
   const runVerification = async (fieldKey: string) => {
     if (!dataMap || !dataMap[fieldKey]) return;
     
-    // In a real app, this might be fetched from a smart contract or trusted API
+    // todo: 1. Ask user to sign a random message with their metamask wallet and retrieve their public address
+    // 2. use ethjs to fetch  ALL current roots from chain using function : 
+    // getDocuments()public view returns(
+    //     address[] memory requester ,
+    //     address[] memory verifer ,
+    //     string[] memory institute,
+    //     string[] memory hash,
+    //     DocStatus[] memory stats
+    // )
+    // 3. use a filter function to find all the roots associated with the requestor's public address 
+    // (just use an index array to record all indices where requester[i] === userAddress and use those indices to further filter the calculated root of merkle tree)
+    // 4. Calculate the root of merkle tree using calculateMerkle(proof)-> hash function 
+    // 5. Check if the calculated root matches any of the roots retrieved from chain. If it does, then we can be reasonably sure that the data is valid and was not tampered with.
     const expectedRoot = "f191fd65395ac0dc79ad8012a876781a77a162e386c4ea06090d111bb6d6b593";
     
+    //todo: remove this input after implementing above steps
+    // we don't want user juggling with salts and hashes
     if (userRootInput !== expectedRoot) {
       setStatus(`SECURITY ALERT: Input root does not match authority root.`);
       return;
@@ -78,8 +92,12 @@ const ProofVerifier: React.FC = () => {
         merkleProof: Object.values(dataMap).map((value: MerkleField) => value.hash) || [], 
     };
 
-    const isValid = await verifyProof(proof, expectedRoot);
-    
+    const root = await verifyProof(proof);
+
+    //this is temporary placeholder
+    //use something like isValid hash.contains(root)
+    //after implementing above steps
+    const isValid = root === expectedRoot;
     setVerifiedFields(prev => ({ ...prev, [fieldKey]: isValid }));
     setStatus(isValid 
       ? `VERIFIED: ${fieldKey} leaf matches root integrity.` 

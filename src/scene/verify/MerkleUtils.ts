@@ -61,15 +61,15 @@ export const calculateMerkleRoot = async (leaves: string[]): Promise<string> => 
 };
 
 
-const verifyProof = async (p: Proof, expectedRoot: string): Promise<boolean> => {
+const verifyProof = async (p: Proof): Promise<string> => {
   const disclosedLeafHash = await hashData(p.value, p.salt);
   const found = p.merkleProof.includes(disclosedLeafHash);
   if (!found) {
-    return false
+    return ""
   };
 
   const calculatedRoot = await calculateMerkleRoot(p.merkleProof);
-  return calculatedRoot === expectedRoot;
+  return calculatedRoot;
 };
 
 export default verifyProof
