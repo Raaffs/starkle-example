@@ -9,7 +9,7 @@ export interface ProofMap {
   [key: string]: MerkleField;
 }
 
-export interface Proof {
+export interface MerkleProof {
   value: string;
   salt: string;
   merkleProof: string[]; 
@@ -61,7 +61,7 @@ export const calculateMerkleRoot = async (leaves: string[]): Promise<string> => 
 };
 
 
-const verifyProof = async (p: Proof): Promise<string> => {
+const verifyMerkleProof = async (p: MerkleProof): Promise<string> => {
   const disclosedLeafHash = await hashData(p.value, p.salt);
   const found = p.merkleProof.includes(disclosedLeafHash);
   if (!found) {
@@ -72,4 +72,4 @@ const verifyProof = async (p: Proof): Promise<string> => {
   return calculatedRoot;
 };
 
-export default verifyProof
+export default verifyMerkleProof

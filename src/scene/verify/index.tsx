@@ -25,7 +25,7 @@ import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 // Types and Mock/Imported Utils
 import type { 
     ProofMap,
-    Proof,
+    MerkleProof,
     MerkleField
  } from './MerkleUtils';
 
@@ -76,7 +76,8 @@ const ProofVerifier: React.FC = () => {
     // 3. use a filter function to find all the roots associated with the requestor's public address 
     // (just use an index array to record all indices where requester[i] === userAddress and use those indices to further filter the calculated root of merkle tree)
     // 4. Calculate the root of merkle tree using calculateMerkle(proof)-> hash function 
-    // 5. Check if the calculated root matches any of the roots retrieved from chain. If it does, then we can be reasonably sure that the data is valid and was not tampered with.
+    // 5. Check if the calculated root matches any of the roots retrieved from chain. 
+    // If it does, then we can be reasonably sure that the data is valid and was not tampered with.
     const expectedRoot = "f191fd65395ac0dc79ad8012a876781a77a162e386c4ea06090d111bb6d6b593";
     
     //todo: remove this input after implementing above steps
@@ -86,16 +87,16 @@ const ProofVerifier: React.FC = () => {
       return;
     }
 
-    const proof: Proof = {
+    const merkleProof: MerkleProof = {
         value: dataMap[fieldKey].value,
         salt: dataMap[fieldKey].salt,
         merkleProof: Object.values(dataMap).map((value: MerkleField) => value.hash) || [], 
     };
 
-    const root = await verifyProof(proof);
+    const root = await verifyProof(merkleProof);
 
     //this is temporary placeholder
-    //use something like isValid hash.contains(root)
+    //use something like isValid = hash.contains(root)
     //after implementing above steps
     const isValid = root === expectedRoot;
     setVerifiedFields(prev => ({ ...prev, [fieldKey]: isValid }));
