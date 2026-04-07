@@ -3,8 +3,7 @@ import React, { useState, type ChangeEvent } from 'react';
 import { 
   Box, 
   Typography, 
-  Button, 
-  TextField, 
+  Button,
   Paper, 
   Stack, 
   Grid, 
@@ -22,6 +21,10 @@ import TerminalIcon from '@mui/icons-material/Terminal';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 
+// Ethers and Contract Data
+import { BrowserProvider, verifyMessage, Contract } from 'ethers';
+import { CONTRACT_ADDRESS, CONTRACT_ABI } from './ContractConfig';
+
 // Types and Mock/Imported Utils
 import type { 
     ProofMap,
@@ -31,10 +34,15 @@ import type {
 
 import verifyProof from './MerkleUtils';
 
+declare global {
+    interface Window {
+        ethereum?: any;
+    }
+}
+
 const ProofVerifier: React.FC = () => {
   const [dataMap, setDataMap] = useState<ProofMap | null>(null);
   const [status, setStatus] = useState<string>('System initialized. Awaiting data source...');
-  const [userRootInput, setUserRootInput] = useState<string>('');
   const [verifiedFields, setVerifiedFields] = useState<Record<string, boolean>>({});
 
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
@@ -64,46 +72,63 @@ const ProofVerifier: React.FC = () => {
   const runVerification = async (fieldKey: string) => {
     if (!dataMap || !dataMap[fieldKey]) return;
     
-    // todo: 1. Ask user to sign a random message with their metamask wallet and retrieve their public address
-    // 2. use ethjs to fetch  ALL current roots from chain using function : 
-    // getDocuments()public view returns(
-    //     address[] memory requester ,
-    //     address[] memory verifer ,
-    //     string[] memory institute,
-    //     string[] memory hash,
-    //     DocStatus[] memory stats
-    // )
-    // 3. use a filter function to find all the roots associated with the requestor's public address 
-    // (just use an index array to record all indices where requester[i] === userAddress and use those indices to further filter the calculated root of merkle tree)
-    // 4. Calculate the root of merkle tree using calculateMerkle(proof)-> hash function 
-    // 5. Check if the calculated root matches any of the roots retrieved from chain. 
-    // If it does, then we can be reasonably sure that the data is valid and was not tampered with.
-    const expectedRoot = "f191fd65395ac0dc79ad8012a876781a77a162e386c4ea06090d111bb6d6b593";
-    
-    //todo: remove this input after implementing above steps
-    // we don't want user juggling with salts and hashes
-    if (userRootInput !== expectedRoot) {
-      setStatus(`SECURITY ALERT: Input root does not match authority root.`);
-      return;
+    if (!window.ethereum) {
+        setStatus("ERROR: MetaMask not detected.");
+        return;
     }
 
-    const merkleProof: MerkleProof = {
-        value: dataMap[fieldKey].value,
-        salt: dataMap[fieldKey].salt,
-        merkleProof: Object.values(dataMap).map((value: MerkleField) => value.hash) || [], 
-    };
+    try {
+        const provider = new BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
 
-    const root = await verifyProof(merkleProof);
+        // 1. Random challenge so replayed signatures don't work
+        const challenge = `ProofChain verification challenge: ${crypto.randomUUID()}`;
+        
+        let userAddress: string;
+        try {
+            const signature = await signer.signMessage(challenge);
+            // Recover address from signature — this is the anti-impersonation check
+            userAddress = verifyMessage(challenge, signature);
+        } catch {
+            setStatus("ERROR: User rejected signing or MetaMask error.");
+            return;
+        }
 
-    //this is temporary placeholder
-    //use something like isValid = hash.contains(root)
-    //after implementing above steps
-    const isValid = root === expectedRoot;
-    setVerifiedFields(prev => ({ ...prev, [fieldKey]: isValid }));
-    setStatus(isValid 
-      ? `VERIFIED: ${fieldKey} leaf matches root integrity.` 
-      : `FAILURE: ${fieldKey} data corruption detected.`
-    );
+        // 2 & 3. Fetch all documents from contract and filter roots matching wallet address
+        setStatus("Fetching active ProofChain documents...");
+        const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
+        const [requesters, , , hashes, ] = await contract.getDocuments();
+
+        const userRoots: string[] = requesters
+            .map((addr: string, i: number) => ({ addr, hash: hashes[i] }))
+            .filter(({ addr }: { addr: string }) => addr.toLowerCase() === userAddress.toLowerCase())
+            .map(({ hash }: { hash: string }) => hash);
+
+        if (userRoots.length === 0) {
+            setStatus("ERROR: No certificates found for this wallet address.");
+            return;
+        }
+
+        // 4. Calculate the local Merkle root from proof
+        const merkleProof: MerkleProof = {
+            value: dataMap[fieldKey].value,
+            salt: dataMap[fieldKey].salt,
+            merkleProof: Object.keys(dataMap).sort().map(key => dataMap[key].hash), 
+        };
+        const computedRoot = await verifyProof(merkleProof);
+
+        // 5. Check if computed root matches any of user's on-chain roots
+        const isValid = userRoots.some(r => r.toLowerCase() === computedRoot.toLowerCase());
+        
+        setVerifiedFields(prev => ({ ...prev, [fieldKey]: isValid }));
+        setStatus(isValid 
+            ? `VERIFIED: ${fieldKey} leaf matches root integrity.` 
+            : `FAILURE: ${fieldKey} data corruption detected.`
+        );
+    } catch (err: any) {
+        console.error(err);
+        setStatus("ERROR: Blockchain communication failure.");
+    }
   };
 
   return (
@@ -172,25 +197,6 @@ const ProofVerifier: React.FC = () => {
                   </Typography>
                 )}
               </Box>
-
-              <Box>
-                <Typography variant="caption" sx={{ color: '#718096', mb: 1, display: 'block' }}>
-                  AUTHORITATIVE ROOT HASH
-                </Typography>
-                <TextField 
-                  fullWidth
-                  placeholder="Paste 64-char hash..."
-                  variant="outlined"
-                  size="small"
-                  value={userRootInput}
-                  onChange={(e) => setUserRootInput(e.target.value)}
-                  sx={{ 
-                    '& .MuiOutlinedInput-root': { bgcolor: '#0B0E14', color: '#fff', borderRadius: 2, fontSize: '0.8rem' },
-                    '& .MuiOutlinedInput-notchedOutline': { borderColor: '#2D3748' },
-                    '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: '#4A5568' }
-                  }}
-                />
-              </Box>
             </Stack>
           </Box>
 
@@ -243,7 +249,7 @@ const ProofVerifier: React.FC = () => {
             ) : (
               <Grid container spacing={2}>
                 {Object.keys(dataMap).map(key => (
-                  <Grid item xs={12} sm={6} lg={4} xl={3} key={key}>
+                  <Grid size={{ xs: 12, sm: 6, lg: 4, xl: 3 }} key={key} sx={{ p: 1 }}>
                     <Paper sx={{ 
                       p: 2.5, 
                       bgcolor: '#0F1219', 
