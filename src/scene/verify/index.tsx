@@ -78,7 +78,7 @@ const ProofVerifier: React.FC = () => {
     // 4. Calculate the root of merkle tree using calculateMerkle(proof)-> hash function 
     // 5. Check if the calculated root matches any of the roots retrieved from chain. 
     // If it does, then we can be reasonably sure that the data is valid and was not tampered with.
-    const expectedRoot = "f191fd65395ac0dc79ad8012a876781a77a162e386c4ea06090d111bb6d6b593";
+    const expectedRoot = "837be6132f53f381671a4a4a9f63157921305547efdacb03f049ddc77a73778e";
     
     //todo: remove this input after implementing above steps
     // we don't want user juggling with salts and hashes
