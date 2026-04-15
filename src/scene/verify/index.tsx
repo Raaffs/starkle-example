@@ -13,23 +13,35 @@ import {
   Chip, 
   Fade, 
   GlobalStyles,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  CircularProgress,
+  IconButton,
 } from '@mui/material';
+import LightModeOutlinedIcon from '@mui/icons-material/LightModeOutlined';
+import DarkModeOutlinedIcon from '@mui/icons-material/DarkModeOutlined';
 import CloudUploadIcon from '@mui/icons-material/CloudUpload';
 import VerifiedUserIcon from '@mui/icons-material/VerifiedUser';
 import StorageIcon from '@mui/icons-material/Storage';
 import TerminalIcon from '@mui/icons-material/Terminal';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
+import FingerprintIcon from '@mui/icons-material/Fingerprint';
+import GppBadIcon from '@mui/icons-material/GppBad';
 
 // Ethers and Contract Data
 import { BrowserProvider, verifyMessage, Contract } from 'ethers';
 import { CONTRACT_ADDRESS, CONTRACT_ABI } from './ContractConfig';
+import { useTheme } from '@mui/material/styles';
+import { useContext } from 'react';
+import { ColorModeContext } from '../../theme';
 
 // Types and Mock/Imported Utils
 import type { 
     ProofMap,
     MerkleProof,
-    MerkleField
  } from './MerkleUtils';
 
 import verifyProof from './MerkleUtils';
@@ -40,10 +52,24 @@ declare global {
     }
 }
 
+interface VerificationResult {
+    field: string;
+    value: string;
+    salt: string;
+    isValid: boolean;
+    error?: string;
+}
+
 const ProofVerifier: React.FC = () => {
+  const theme = useTheme();
+  const colorMode = useContext(ColorModeContext);
+  const isDark = theme.palette.mode === 'dark';
+
   const [dataMap, setDataMap] = useState<ProofMap | null>(null);
   const [status, setStatus] = useState<string>('System initialized. Awaiting data source...');
   const [verifiedFields, setVerifiedFields] = useState<Record<string, boolean>>({});
+  const [loadingField, setLoadingField] = useState<string | null>(null);
+  const [result, setResult] = useState<VerificationResult | null>(null);
 
   const handleFileUpload = (e: ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -77,6 +103,9 @@ const ProofVerifier: React.FC = () => {
         return;
     }
 
+    setLoadingField(fieldKey);
+    setStatus(`Initializing verification for field: ${fieldKey}`);
+
     try {
         const provider = new BrowserProvider(window.ethereum);
         const signer = await provider.getSigner();
@@ -91,13 +120,14 @@ const ProofVerifier: React.FC = () => {
             userAddress = verifyMessage(challenge, signature);
         } catch {
             setStatus("ERROR: User rejected signing or MetaMask error.");
+            setLoadingField(null);
             return;
         }
 
-        // 2 & 3. Fetch all documents from contract and filter roots matching wallet address
-        setStatus("Fetching active ProofChain documents...");
+        // 2 & 3. Fetch all certificates from contract and filter roots matching wallet address
+        setStatus("Fetching active ProofChain certificates...");
         const contract = new Contract(CONTRACT_ADDRESS, CONTRACT_ABI, provider);
-        const [requesters, , , hashes, ] = await contract.getDocuments();
+        const [requesters, , , hashes, ] = await contract.getCertificates();
 
         const userRoots: string[] = requesters
             .map((addr: string, i: number) => ({ addr, hash: hashes[i] }))
@@ -106,6 +136,14 @@ const ProofVerifier: React.FC = () => {
 
         if (userRoots.length === 0) {
             setStatus("ERROR: No certificates found for this wallet address.");
+            setResult({
+                field: fieldKey,
+                value: dataMap[fieldKey].value,
+                salt: dataMap[fieldKey].salt,
+                isValid: false,
+                error: "Wallet Address Mismatch: No matching root on blockchain."
+            });
+            setLoadingField(null);
             return;
         }
 
@@ -121,6 +159,12 @@ const ProofVerifier: React.FC = () => {
         const isValid = userRoots.some(r => r.toLowerCase() === computedRoot.toLowerCase());
         
         setVerifiedFields(prev => ({ ...prev, [fieldKey]: isValid }));
+        setResult({
+            field: fieldKey,
+            value: dataMap[fieldKey].value,
+            salt: dataMap[fieldKey].salt,
+            isValid: isValid
+        });
         setStatus(isValid 
             ? `VERIFIED: ${fieldKey} leaf matches root integrity.` 
             : `FAILURE: ${fieldKey} data corruption detected.`
@@ -128,6 +172,8 @@ const ProofVerifier: React.FC = () => {
     } catch (err: any) {
         console.error(err);
         setStatus("ERROR: Blockchain communication failure.");
+    } finally {
+        setLoadingField(null);
     }
   };
 
@@ -135,10 +181,10 @@ const ProofVerifier: React.FC = () => {
     <>
       {/* 1. GLOBAL RESET: This removes the "left/top edges" and white margins */}
       <GlobalStyles styles={{ 
-        body: { margin: 0, padding: 0, backgroundColor: '#0B0E14', overflow: 'hidden' },
+        body: { margin: 0, padding: 0, backgroundColor: theme.palette.background.default, overflow: 'hidden' },
         html: { width: '100vw', height: '100vh' },
         '*::-webkit-scrollbar': { width: '6px' },
-        '*::-webkit-scrollbar-thumb': { backgroundColor: '#2D3748', borderRadius: '10px' }
+        '*::-webkit-scrollbar-thumb': { backgroundColor: isDark ? '#2D3748' : '#CBD5E0', borderRadius: '10px' }
       }} />
 
       {/* 2. ROOT CONTAINER: Fixed positioning ensures it covers the browser 100% */}
@@ -149,18 +195,18 @@ const ProofVerifier: React.FC = () => {
         position: 'fixed',
         top: 0,
         left: 0,
-        bgcolor: '#0B0E14', 
-        color: '#E2E8F0',
+        bgcolor: 'background.default', 
+        color: 'text.primary',
         fontFamily: 'Inter, sans-serif'
       }}>
         
         {/* LEFT SIDEBAR: Control Panel */}
         <Box sx={{ 
           width: 320, 
-          borderRight: '1px solid #1A202C', 
+          borderRight: `1px solid ${theme.palette.divider}`, 
           display: 'flex', 
           flexDirection: 'column', 
-          bgcolor: '#0F1219' 
+          bgcolor: 'background.paper' 
         }}>
           <Box sx={{ p: 3, display: 'flex', alignItems: 'center', gap: 2 }}>
             <VerifiedUserIcon sx={{ color: '#3182ce', fontSize: 28 }} />
@@ -169,10 +215,10 @@ const ProofVerifier: React.FC = () => {
             </Typography>
           </Box>
 
-          <Divider sx={{ borderColor: '#1A202C' }} />
+          <Divider sx={{ borderColor: 'divider' }} />
 
           <Box sx={{ p: 3, flexGrow: 1 }}>
-            <Typography variant="caption" sx={{ color: '#4A5568', fontWeight: 800, mb: 3, display: 'block', letterSpacing: 1 }}>
+            <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.7, fontWeight: 800, mb: 3, display: 'block', letterSpacing: 1 }}>
               AUTHENTICATION CONFIG
             </Typography>
             
@@ -201,15 +247,15 @@ const ProofVerifier: React.FC = () => {
           </Box>
 
           {/* STATUS LOG: Cyber terminal look */}
-          <Box sx={{ p: 2, m: 2, bgcolor: '#080A0F', borderRadius: 2, border: '1px solid #1A202C' }}>
+          <Box sx={{ p: 2, m: 2, bgcolor: isDark ? '#080A0F' : '#EDF2F7', borderRadius: 2, border: `1px solid ${theme.palette.divider}` }}>
               <Stack direction="row" spacing={1} alignItems="center" mb={1}>
-                  <TerminalIcon sx={{ fontSize: 14, color: '#4FD1C5' }} />
-                  <Typography variant="caption" sx={{ color: '#4FD1C5', fontWeight: 800 }}>SYSTEM LOG</Typography>
+                  <TerminalIcon sx={{ fontSize: 14, color: isDark ? '#4FD1C5' : '#3182ce' }} />
+                  <Typography variant="caption" sx={{ color: isDark ? '#4FD1C5' : '#3182ce', fontWeight: 800 }}>SYSTEM LOG</Typography>
               </Stack>
               <Typography sx={{ 
                 fontFamily: "'JetBrains Mono', monospace", 
                 fontSize: '11px', 
-                color: '#0bf52eff', 
+                color: isDark ? '#0bf52eff' : '#2F855A', 
                 wordBreak: 'break-all',
                 lineHeight: 1.4
               }}>
@@ -219,17 +265,22 @@ const ProofVerifier: React.FC = () => {
         </Box>
 
         {/* MAIN WORKSPACE */}
-        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', bgcolor: '#0B0E14' }}>
+        <Box sx={{ flexGrow: 1, display: 'flex', flexDirection: 'column', bgcolor: 'background.default' }}>
           
-          <AppBar position="static" elevation={0} sx={{ bgcolor: 'transparent', borderBottom: '1px solid #1A202C' }}>
+          <AppBar position="static" elevation={0} sx={{ bgcolor: 'transparent', borderBottom: `1px solid ${theme.palette.divider}` }}>
             <Toolbar variant="dense" sx={{ justifyContent: 'space-between' }}>
               <Stack direction="row" spacing={2} alignItems="center">
                 <StorageIcon sx={{ color: '#4A5568', fontSize: 20 }} />
-                <Typography variant="subtitle2" sx={{ color: '#A0AEC0', fontWeight: 600 }}>
+                <Typography variant="subtitle2" sx={{ color: 'text.secondary', fontWeight: 600 }}>
                   Verification Workspace
                 </Typography>
               </Stack>
-              {dataMap && <Chip label="SECURE ENVIRONMENT" size="small" sx={{ height: 20, bgcolor: '#1A202C', color: '#3182ce', fontSize: '10px', fontWeight: 700 }} />}
+              <Stack direction="row" spacing={1} alignItems="center">
+                {dataMap && <Chip label="SECURE ENVIRONMENT" size="small" sx={{ height: 20, bgcolor: 'divider', color: 'primary.main', fontSize: '10px', fontWeight: 700 }} />}
+                <IconButton onClick={colorMode.toggleColorMode} color="inherit" size="small">
+                  {isDark ? <LightModeOutlinedIcon fontSize="small" /> : <DarkModeOutlinedIcon fontSize="small" />}
+                </IconButton>
+              </Stack>
             </Toolbar>
           </AppBar>
 
@@ -241,9 +292,9 @@ const ProofVerifier: React.FC = () => {
                   alignItems: 'center', justifyContent: 'center', 
                   border: '1px dashed #1A202C', borderRadius: 6
                 }}>
-                  <CloudUploadIcon sx={{ fontSize: 60, color: '#1A202C', mb: 2 }} />
-                  <Typography variant="h6" color="#2D3748" fontWeight={700}>NO DATA SOURCE FOUND</Typography>
-                  <Typography variant="body2" color="#2D3748">Please upload a JSON file to begin verification</Typography>
+                  <CloudUploadIcon sx={{ fontSize: 60, color: 'divider', mb: 2 }} />
+                  <Typography variant="h6" color="text.secondary" sx={{ opacity: 0.3 }} fontWeight={700}>NO DATA SOURCE FOUND</Typography>
+                  <Typography variant="body2" color="text.secondary" sx={{ opacity: 0.3 }}>Please upload a JSON file to begin verification</Typography>
                 </Box>
               </Fade>
             ) : (
@@ -252,37 +303,40 @@ const ProofVerifier: React.FC = () => {
                   <Grid size={{ xs: 12, sm: 6, lg: 4, xl: 3 }} key={key} sx={{ p: 1 }}>
                     <Paper sx={{ 
                       p: 2.5, 
-                      bgcolor: '#0F1219', 
-                      border: '1px solid #1A202C', 
+                      bgcolor: 'background.paper', 
+                      border: `1px solid ${theme.palette.divider}`, 
                       borderRadius: 3,
                       transition: 'all 0.2s',
+                      position: 'relative',
+                      overflow: 'hidden',
                       '&:hover': { borderColor: '#3182ce', transform: 'translateY(-2px)' }
                     }}>
                        <Stack direction="row" justifyContent="space-between" alignItems="center" mb={2}>
-                          <Typography variant="body2" fontWeight={700} sx={{ color: '#F7FAFC' }}>
+                          <Typography variant="body2" fontWeight={700} sx={{ color: 'text.primary' }}>
                             {key.toUpperCase()}
                           </Typography>
-                          {verifiedFields[key] === true && <CheckCircleIcon sx={{ color: '#48BB78', fontSize: 18 }} />}
-                          {verifiedFields[key] === false && <ErrorOutlineIcon sx={{ color: '#F56565', fontSize: 18 }} />}
+                          {verifiedFields[key] === true && <CheckCircleIcon sx={{ color: 'success.main', fontSize: 18 }} />}
+                          {verifiedFields[key] === false && <ErrorOutlineIcon sx={{ color: 'error.main', fontSize: 18 }} />}
                        </Stack>
 
-                       <Typography variant="caption" sx={{ color: '#718096', display: 'block', mb: 2, fontFamily: 'monospace' }}>
-                         Salt: {dataMap[key].salt.substring(0, 16)}...
+                       <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.6, display: 'block', mb: 2, fontFamily: 'monospace' }}>
+                         Hash: {dataMap[key].hash.substring(0, 16)}...
                        </Typography>
 
                        <Button 
                         fullWidth 
                         variant="outlined"
                         size="small"
+                        disabled={loadingField === key}
                         onClick={() => runVerification(key)}
                         sx={{ 
                           textTransform: 'none', 
-                          borderColor: '#2D3748', 
-                          color: '#A0AEC0',
-                          '&:hover': { borderColor: '#3182ce', color: '#3182ce' }
+                          borderColor: 'divider', 
+                          color: 'text.secondary',
+                          '&:hover': { borderColor: 'primary.main', color: 'primary.main' }
                         }}
                        >
-                        Verify Node
+                        {loadingField === key ? <CircularProgress size={16} color="inherit" /> : "Reveal & Verify"}
                        </Button>
                     </Paper>
                   </Grid>
@@ -292,6 +346,97 @@ const ProofVerifier: React.FC = () => {
           </Box>
         </Box>
       </Box>
+
+      {/* VERIFICATION RESULT DIALOG */}
+      <Dialog 
+        open={!!result} 
+        onClose={() => setResult(null)}
+        PaperProps={{
+            sx: {
+                bgcolor: 'background.paper',
+                color: 'text.primary',
+                border: `1px solid ${theme.palette.divider}`,
+                borderRadius: 4,
+                minWidth: 450,
+                backgroundImage: 'none'
+            }
+        }}
+      >
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 2, pb: 1 }}>
+            {result?.isValid ? (
+                <VerifiedUserIcon sx={{ color: 'success.main' }} />
+            ) : (
+                <GppBadIcon sx={{ color: 'error.main' }} />
+            )}
+            <Typography variant="h6" fontWeight={800}>
+                {result?.isValid ? "INTEGRITY VERIFIED" : "CANNOT VERIFY INTEGRITY"}
+            </Typography>
+        </DialogTitle>
+        
+        <DialogContent>
+            <Stack spacing={3} sx={{ mt: 1 }}>
+                <Box>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.8, fontWeight: 800, textTransform: 'uppercase' }}>
+                        Field Identifier
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 700, color: 'text.primary' }}>
+                        {result?.field.toUpperCase()}
+                    </Typography>
+                </Box>
+
+                <Box sx={{ p: 2, bgcolor: isDark ? '#080A0F' : '#EDF2F7', borderRadius: 2, border: `1px solid ${theme.palette.divider}` }}>
+                    <Stack direction="row" spacing={1} alignItems="center" mb={1}>
+                        <FingerprintIcon sx={{ fontSize: 16, color: result?.isValid ? (isDark ? '#4FD1C5' : '#3182ce') : 'error.main' }} />
+                        <Typography variant="caption" sx={{ color: result?.isValid ? (isDark ? '#4FD1C5' : '#3182ce') : 'error.main', fontWeight: 800 }}>
+                            REVEALED DATA
+                        </Typography>
+                    </Stack>
+                    <Typography sx={{ 
+                        fontFamily: "'JetBrains Mono', monospace", 
+                        fontSize: '18px', 
+                        color: 'text.primary',
+                        fontWeight: 900
+                    }}>
+                        {result?.value || "N/A"}
+                    </Typography>
+                </Box>
+
+                <Box>
+                    <Typography variant="caption" sx={{ color: 'text.secondary', opacity: 0.8, fontWeight: 800, textTransform: 'uppercase' }}>
+                        Cryptographic Salt
+                    </Typography>
+                    <Typography variant="body2" sx={{ fontFamily: 'monospace', color: 'text.secondary', wordBreak: 'break-all' }}>
+                        {result?.salt}
+                    </Typography>
+                </Box>
+
+                {!result?.isValid && (
+                    <Box sx={{ p: 2, bgcolor: isDark ? 'rgba(245, 101, 101, 0.1)' : '#FFF5F5', border: '1px solid', borderColor: 'error.main', borderRadius: 2 }}>
+                        <Typography variant="body2" sx={{ color: 'error.main', fontWeight: 600 }}>
+                            {result?.error || "The local proof root does not match any certificate authorized for this wallet on the blockchain."}
+                        </Typography>
+                    </Box>
+                )}
+            </Stack>
+        </DialogContent>
+
+        <DialogActions sx={{ p: 3, pt: 1 }}>
+            <Button 
+                onClick={() => setResult(null)} 
+                fullWidth 
+                variant="contained"
+                sx={{ 
+                    bgcolor: result?.isValid ? 'primary.main' : 'error.main',
+                    '&:hover': { bgcolor: result?.isValid ? 'primary.dark' : 'error.dark' },
+                    fontWeight: 700,
+                    textTransform: 'none',
+                    borderRadius: 2
+                }}
+            >
+                Close Handshake
+            </Button>
+        </DialogActions>
+      </Dialog>
     </>
   );
 };

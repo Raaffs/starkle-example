@@ -1,9 +1,9 @@
-export const CONTRACT_ADDRESS = "0x2884753e6a08f1fB80E7Ef1F3e48f564f10A9975";
+export const CONTRACT_ADDRESS = "0xA57B8a5584442B467b4689F1144D269d096A3daF";
 
 export const CONTRACT_ABI = [
   {
     "inputs": [],
-    "name": "getDocuments",
+    "name": "getCertificates",
     "outputs": [
       {
         "internalType": "address[]",
@@ -26,14 +26,7 @@ export const CONTRACT_ABI = [
         "type": "string[]"
       },
       {
-        "components": [
-          {
-            "internalType": "enum DocumentRegistry.DocStatus",
-            "name": "status",
-            "type": "uint8"
-          }
-        ],
-        "internalType": "struct DocumentRegistry.DocStatus[]",
+        "internalType": "enum Verification.CertificateStatus[]",
         "name": "stats",
         "type": "uint8[]"
       }
