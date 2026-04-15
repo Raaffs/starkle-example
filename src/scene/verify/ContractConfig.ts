@@ -1,9 +1,9 @@
-export const CONTRACT_ADDRESS = "0xA57B8a5584442B467b4689F1144D269d096A3daF";
+export const CONTRACT_ADDRESS = "0x1Da26345D7d4e24a148C2B49E9b2C8af2e3e5239";
 
 export const CONTRACT_ABI = [
   {
     "inputs": [],
-    "name": "getCertificates",
+    "name": "getDocuments",
     "outputs": [
       {
         "internalType": "address[]",
